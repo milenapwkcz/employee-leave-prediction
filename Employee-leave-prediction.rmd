@@ -1,0 +1,518 @@
+---
+title: "Projekt 2"
+author: "Milena Pawlikiewicz, Filip Szempruch"
+date: "2023-05-23"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+
+
+```
+
+```{r warning=FALSE, message=FALSE}
+library(kableExtra)
+library(psych)
+library(rcompanion)
+```
+
+## Cel projektu
+
+Celem projektu jest zastosowanie modeli Machine Learning do predykcji wartości zmiennej objaśnianej. W tym celu wykorzystane zostaną wybrane metody uczenia maszynowego. W projekcie zawarta jest również charakterystyka danych, do której wliczają się podstawowe statystyki, analiza wypływu poszczególnych zmiennych na zmienną prognozowaną oraz ocena zbalansowania zbioru. Ostatecznie wyniki dla różnych metod zostaną ze sobą porównane pod kątem dokładności oraz przeprowadzona zostanie analiza interpretowalności.
+
+## Opis danych
+
+Zbiór danych składa się z 4653 obserwacji analizowanych pod kątem 9 zmiennych. Zbiór swoją genezę ma jako raport zebrany pod koniec roku 2018.
+
+```{r}
+#employee <- read.csv("C:/Users/Milena.Pawlikiewicz/Desktop/personal/studia/uswr/Projekt 2/Employee.xls")
+employee <- read.csv("Employee.xls")
+```
+
+W zbiorze znajdują się zmienne: <br>
+-*Education*, określająca poziom edukacji (w zbiorze istnieją trzy poziomy wykształcenia: licencjat, magister i doktor; <br>
+-*JoiningYear*, określająca rok dołączenia do firmy; <br>
+-*City*, określająca lokalizację miejsca pracy; <br>
+-*PaymentTier*, zmienna kategoryczna określająca poziom wynagrodzenia (1- najwyższy, 2-średni, 3-najniższy); <br>
+-*Age*, czyli wiek pracownika; <br>
+-*Gender*, czyli płeć; <br>
+-*EverBenched*, określająca czy dany pracownik był kiedykolwiek odsunięty od projektu przez okres dłuższy niż miesiąc; <br>
+-*ExperienceInCurrentDomain*, czyli obecny poziom doświadczenia (w zakresie 0-7); <br>
+
+Zmienną prognozowaną w projekcie jest zmienna *LeaveOrNot*, która jest zmienną binarną mówiącą o tym, czy pracownik w ostatnim okresie odszedł z firmy (1- tak, 0-nie). Podany zbiór jest w pełni dopasowany do problemów prognostycznych, jako że na podstawie zmiennych kategorycznych, które w późniejszym etapie można przekształcić na zmienne binarne oraz zmiennych ilościowych możemy predykować wartość zmiennej *LeaveOrNot*. 
+
+## Sens badania
+
+Techniki ML umożliwiają zdobywanie informacji mogących być później wykorzystanymi do optymalizacji operacji biznesowych. W tym przypadku problemem przedsiębiorstwa jest przewidzenie rotacji pracowników. Na podstawie uzyskanych wyników zarząd może uzyskać informacje na temat tego czy pracownik z danym doświadczeniem, wiekiem czy rokiem dołączenia do firmy odejdzie z firmy. Nadmierna rotacja zbyt doświadczonych pracowników jest zjawiskiem negatywnym dla przedsiębiorstwa, jako że proces wdrożenia nowej osoby jest czasochłonny i kosztowny dla firmy. Wyniki mogą umożliwić kierownikom analizę czy występują czynniki łączące osoby odchodzące z pracy i tym samym mogą oni częściowo zapobiec niepożądanemu odejściu najbardziej wartościowych pracowników. Na podstawie badania będą wiedzieć też których z pracowników należy motywować bardziej, jako że prawdopodobieństwo, że zostaną w firmie na dłuższy okres jest zdecydowanie większe. Sam model będzie mógł być użyty w przyszłosći dla nowszej grupy pracowników.
+
+### Podstawowe statystyki
+
+Pracę rozpoczęto od wykonania wstępnej analizy danych. Analiza podzielona została na dwie części- w pierwszej z nich analizowano zmienne ilościowe pod kątem podstawowych statystyk opisowych, a w drugiej z nich przeanalizowano zmienne kategoryczne pod kątem częstości występowania w zbiorze.
+
+#### Zmienne ilościowe
+
+Analizę rozpoczęto od przedstawienia podstawowych statysyk opisowych zmiennej ilościowej *age_desc*. Jest to jedyna zmienna ilościowa występująca w zbiorze.
+
+```{r}
+age_desc = as.data.frame(round(describe(employee$Age),2))
+age_desc = age_desc[,-c(1,2,6,7,10,13)]
+rownames(age_desc) = c("Age")
+kbl(age_desc) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Na podstawie podstawowych statystyk zauważyć można, że średni wiek pracownika oscyluje w okolicy 29 lat. Połowa pracowników ma mniej lub równo 28 lat, co sugeruje, iż w firmie pracuje znaczna część osób stosunkowo mlodych. Najmłodszy pracownik ma 22 lata a najstarszy 41 lat, co ponownie potwierdza tezę o młodej grupie pracowników. Dla zmiennej określającej wiek wykryto skośność prawostronną i rozkład platykurtyczny, co wskazywać może na brak wartości odstających- rozkład jest bardziej spłaszczony.
+
+#### Zmienne kategoryczne
+
+Następnie zdecydowano się na przedstawienie częstości występowania konkretnych wartości dla pozostałych zmiennych, które są zmiennymi kategorycznymi.
+
+##### Education
+
+```{r}
+kbl(table(employee$Education), col.names = c("Education", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+W zbiorze danych zdecydowanie dominują osoby, które ukończyły tylko pierwszy stopień studiów. Grupa ta stanowi około 78% całości zbioru. Około 19% pracowników osiągnęło tytuł magistra, a tylko 3% z nich ma tytuł doktora. Wszyscy pracownicy w badanym zbiorze mieli ukończony co najmniej pierwszy stopień studiów- nie zanotowano pracowników bez wykształcenia wyższego. Sama statystyka umożliwia jednak pokazanie, że dla tej konkretnej firmy wystarczyło uzyskać tytuł licencjata aby móc być rozważanym przy rekrtuacji.
+
+##### JoiningYear
+```{r}
+kbl(table(employee$JoiningYear), col.names = c("JoiningYear", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Na podstawie analizy roku zatrudnienia pracowników mając pod uwagą to, że analiza przeprowadzona była pod koniec 2018 roku, zauważyć można, że największa grupa pracowników dołączyła do firmy w 2017 roku, mając około roku stażu. Struktura ta przypomina stan zatrudnienia korporacji, gdzie dochodzi do znacznej rotacji ludzi. Im dalej w przeszłość, zauważyć można, że dla danego roku zatrudnienia obecnie pracuje mniej osób. Analiza zaczyna się od 2012 i kończy od 2018, gdzie najmniej osób zatrudnionych i obecnie pracujących jest w roku 2018 (co może wiązać się z niepełnymi danymi w momencie powstania analizy) oraz w roku 2012 (co związane jest prawdopodobnie ze zmianą pracy na przestrzeni opisywanych sześciu lat).
+
+##### City
+```{r}
+kbl(table(employee$City), col.names = c("City", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+W przypadku analizy zatrudnienia pod kątem lokalizacji biur, wyróżnione zostały trzy lokalizacje biur. Około połowa osób pracuje w mieście Bangalore. Ilości pracowników w Pune i w New Delhi są do siebie zbliżone, jednak w Pune pracuje około 100 osób więcej. Procentowo zatrudnienie dla Pune i New Delhi jest równe kolejno 27% i 25%.
+
+##### PaymentTier
+```{r}
+kbl(table(employee$PaymentTier), col.names = c("PaymentTier", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Około 75% klasyfikuje się do najniższych widełek płacowych. Wraz ze wzrostem płac maleje ilość pracowników, co jest typowym zachowaniem dla miejsca pracy, które nie potrzebuje samych specjalistów o bardzo wysokich zarobkach. Do najwyższych widełek płacowych należy tylko 5% wszystkich zatrudnionych.
+
+##### Gender
+```{r}
+kbl(table(employee$Gender), col.names = c("Gender", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+W analizowanym przedsiębiorstwie zatrudnionych jest około 60% mężczyzn i 40% kobiet. Nie można tym samym powiedzieć, że firma zdominowana jest przez którąkolwiek z płci.
+
+##### EverBenched
+```{r}
+kbl(table(employee$EverBenched), col.names = c("EverBenched", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Zdecydowana większość pracowników, bo aż około 90%, nigdy nie zostali odsunięci od projektu na okres dłuższy niż miesiąc. Tym samym można mówić o dość stabilnym rozkładzie pracy, gdzie przypadki, w których dla danego pracownika nie udało się dopasować projektu są raczej zaliczane do wyjątków. 
+
+##### ExperienceInCurrentDomain
+```{r}
+kbl(table(employee$ExperienceInCurrentDomain), col.names = c("ExperienceInCurrentDomain", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+W przypadku analizy obecnego poziomu doświadczenia, najliczniejszym zbiorem są pracownicy klasyfikowany na poziom doświadczenia 2. Dla skali od 0-7 nie jest to najlepszy wynik i sugeruje to, że około 23% pracowników jest już wdrożonych w swoją pracę i potrafi wykonywać podstawowe czynności, jednak prawdopodobnie mieliby oni problem z wykonaniem nowych i rozszerzonych czynności. Liczną grupą są również pracownicy klasyfikowani na poziom 4 i 5, co daje im już większy poziom wdrożenia i świadomość działania w miejscu pracy. Najmniej liczną grupą są pracownicy zaliczani do poziomów najwyższych, czyli 6 i 7, których w całym zbiorze jest tylko 0,3%. Podobnie jak przy analizie zmiennej PaymentTier, można wywnioskować, że w firmie nie jest wymagana znaczna ilość speców w dziedzinie, a zdecydowanie wystarczy znaczna ilość osób wdrożonych na wystarczającym do utrzymania codziennych obowiązków poziomie.
+
+#### Analiza wpływu wybranych zmiennych objaśniających
+
+Następnie zdecydowano się na analizę wpływów wybranych zmiennych objaśnianych. Pary zostały dobrane tak, aby wnioski wynikające z analizy mogły nieść ze sobą uniwersalną informację.
+
+##### Education i PaymentTier
+
+```{r}
+kbl(table(employee$Education, employee$PaymentTier)) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Dla analizy zależności między stopniem wykształcenia a poziomem zarobków, nie odkryto jednoznacznej relacji. Dla każdego stopnia wykształcenia zachowano proporcję, iż wraz ze wzrostem płacy maleje osób pracowników należących do danej grupy. W przypadku tytułu licencjata i doktora większość osób należy do trzeciej grupy płacowej. Mniejsze zaburzenie występuje w przypadku osób mających tytuł magistra. Dla nich też podobnie największa liczba osób należy do grupy trzeciej, jednak nie zaobserwowano tak dużej dysproporcji ilościowej między grupą 2 i 3 jak w pozostałych przypadkach.
+
+##### JoiningYear i PaymentTier
+
+```{r}
+kbl(table(employee$JoiningYear, employee$PaymentTier)) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+Przed wykonaniem porównania można było wstępnie założyć, iż pracownicy pracujący w firmie najdłużej najprawdopodobniej należą do grupy najlepiej zarabiających osób. Analiza jednak zaprzeczyła tem wstępnemu wnioskowi. Nie można na podstawie zestawienia odkryć jednoznacznej zależności oprócz wyróżnienia roku 2017, gdzie dysproporcja między zatrudnieniem osób należących do trzeciej grupy płacowej i drugiej nie jest tak znaczna jak w przypadku pozostałych lat.
+
+##### Gender i PaymentTier
+
+```{r}
+kbl(table(employee$Gender, employee$PaymentTier)) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+Zestawienie umożliwiające strukturę w zależności od płci i grupy płacowej umożliwiło stwierdzenie, iż większy procent kobiet należy do pierwszej grupy płacowej niż mężczyzn. Mężczyźni w danej firmie średnio zarabiają lepiej na podstawie tego, iż więcej z nich należy do drugiej i trzeicej grupy płacowej, szczególnie zwracając uwagę na to, że kobiet w firmie jest ogółem 40%.
+
+##### ExperienceInCurrentDomain i PaymentTier
+
+```{r}
+kbl(table(employee$ExperienceInCurrentDomain, employee$PaymentTier)) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Analogicznie wstępnie można byłoby wywnioskować, iż wraz ze wzrostem doświadczenia rośnie prawdopodobieństwo, iż osoba należy do pierwszej grupy płacowej. Zestawienie całkowicie obaliło tę tezę i pokazało tym samym, że doświadczenie nie wiąże sie bezpośrednio ze wzrostem płacy.
+
+##### Gender i EverBenched
+
+```{r}
+kbl(table(employee$Gender, employee$EverBenched)) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+Porównanie zmiennej określającej, czy pracownik kiedykolwiek został na więcej niż miesiąc odsunięty od projektu w zależności od płci nie umożliwiło określenia, iż dana sytuacja zdarza się częściej lub rzadziej którejkolwiek z płci. Dla każdej z nich odsetek ten oscyluje w okolicy 10%, przy czym dla kobiet jest on niewiele niższy niż dla mężczyzn, co sugeruje, że kobiety nieznacznie rzadziej zostawały odsunięte od projektów na dłuższy okres czasu.
+
+### Przekształcenie danych
+
+Kolejnym etapem, który umożliwi dalsze przeprowadzenie projektu, jest odpowiednie przekształcenie danych. Dla kolumn, dla których obecnie występują zmienne kategorycze, konieczne jest obłożenie ich funkcją *as.factor()*.
+
+```{r}
+columns = c(1,2,3,4,6,7,8,9)
+
+for(i in columns){
+  employee[,i] = as.factor(employee[,i])
+}
+```
+
+Przez to, że w naszym zbiorze występuje tylko jedna zmienna ilościowa, dla której nie występują wartości odstające, w dalszym etapie nie podjęto dalszej analizy danych pod wpływem wartości odstających. Zdecydowano się jednak na weryfikację, czy dla którejkolwiek z kolumn nie występują braki wartości.
+
+```{r}
+sum(is.na(employee))
+```
+W całym zbiorze danych nie występują jakiekolwiek braki danych.
+
+### Analiza wpływu zmiennych objaśniających na objaśnianą
+
+Następnie zdecydowano się na przedstawienie analizy wpływu zmiennych objaśniających na zmienną objaśnianą. Zdecydowano się na wykorzystanie współczynnika v-Cramera dla zmiennych kateogorycznych, a dla pary zmiennej ilościowej i kategorycznej (Age i LeaveOrNot) obliczono korelację dwuseryjną.
+
+```{r, warning=FALSE, message= FALSE}
+library(ltm)
+wspolczynniki = c()
+for(i in 1:8){
+  wspolczynniki[i] =  cramerV(employee$LeaveOrNot, employee[,i])
+  if(i == 5){
+    wspolczynniki[i] = biserial.cor(employee$Age, employee$LeaveOrNot)
+  }
+}
+
+wspolczynniki_df = data.frame(Zmienna = colnames(employee[,1:8]), Wsp = wspolczynniki)
+kbl(wspolczynniki_df) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Dla zmiennych Age, EverBenched oraz ExperienceInCurrentDomain otrzymane wspólczynniki są niskie i wynoszą poniżej 10%, oznacza to, że zmienne te mają znikomy wpływ na zmienną objaśnianą. Zmienne te zostaną usunięte ze zbioru danych.
+
+```{r}
+employee = employee[,-c(5,7,8)]
+```
+
+### Zbilansowanie zbioru
+
+Aby móc przystąpić do dalszej analizy, zdecydowano się na przedstawienie zbilansowania zbioru.
+
+```{r}
+kbl(table(employee$LeaveOrNot), col.names = c("LeaveOrNot", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+Na podstawie zestawienia zauważyć można, że zbiór nie jest zbilansowany, jako że około 34% obserwacjom przyporządkowano wartość 1 a 66% przyporządkowano wartość 0. Tym samym w dalszym etapie pracy zdecydowano się na zastosowanie **oversamplingu**, czyli uzupełnienia danych za pomocą kopii danych z przyporządkowaną wartością 1. W celu uzyskania wystarczająco zbilansowanego zbioru, można podwoić obserwacje dla *LeaveOrNot* równego 1.
+
+```{r,warning=FALSE, message= FALSE}
+set.seed(401839 + 400234)
+
+#Oversampling
+employee_ones = employee[employee$LeaveOrNot == 1,]
+employee = rbind(employee, employee_ones)
+
+#Mieszanie indeksow
+employee = employee[sample(1:nrow(employee)),]
+rownames(employee) = 1:nrow(employee)
+```
+
+Po przeprowadzeniu operacji oversamplingu zbiór danych jest zbalansowany:
+```{r,warning=FALSE, message= FALSE}
+kbl(table(employee$LeaveOrNot), col.names = c("LeaveOrNot", "Freq")) %>%
+  kable_styling(bootstrap_options = c("striped","bordered"), full_width = F)
+```
+
+# Zmienne fikcyjne (dummy variables)
+
+Na potrzeby stosowanych w dalszych etapach projektu algorytmów zdecydowano się na zamianę zmiennych kategorycznych na dane fikcyjne (dummy variables). Zmienne fikcyjne umożliwiają zaprezentowanie zmiennych kategorycznych w taki sposób, aby dana kolumna przyjmowała tylko wartości 0 lub 1 zależności od tego czy zjawisko opisywane przez zmienną występuje dla danej obserwacji. Przykładowo, zmienna Education przyjmująca trzy wartości w nowym zbiorze zaprezentowana będzie jako dwie zmienne binarne dla jednego i drugiego poziomu edukacji. Nie jest koniecznym uwzględnianie trzeciego poziomu ze względu na to, że bezpośrednią konsekwencją niewystępowania jednego i drugiego poziomu edukacji (sytuacji, dla których obydwie kolumny przyjmują wartości 0) jest występowanie trzeciego poziomu. 
+
+
+```{r  warning=FALSE, message= FALSE}
+library(fastDummies)
+
+df_dummy = dummy_cols(employee[,-6],remove_selected_columns = TRUE, remove_first_dummy =  TRUE)
+employee_dummy = cbind(df_dummy, LeaveOrNot = employee[,6])
+```
+
+
+# Podział zbioru danych na uczący i testowy
+
+Kolejno zdecydowano się na podział zbioru danych na zbiór uczący i testowy w proporcjach 70/30. 
+
+```{r,warning=FALSE, message= FALSE}
+colnames(employee_dummy)[9] = "City_New_Delhi"
+
+index = sample(1:nrow(employee_dummy), 0.7*nrow(employee_dummy), F)
+
+employee_dummy_train =  employee_dummy[index,] 
+employee_dummy_test = employee_dummy[-index,]
+```
+
+
+# Przeprowadzenie prognozy
+
+## SVM
+
+Na początku przystąpiono do prognozy za pomocą metody SVM. Metoda SVM, czyli Support Vector Machine, polega na znalezieniu optymalnej hiperpłaszczyzny, czyli płaszczyzny o jednym wymiarze mniej niż przestrzeń, między dwoma lub więcej, która najlepiej dzieli próbki z różnych klas. 
+W celu znalezienia optymalnej hiperpłaszczyzny, algorytm SVM poszukuje takiego wektora wspierającego (czyli wektora wag), który maksymalizuje margines pomiędzy hiperpłaszczyzną a najbliższymi próbkami z obu klas, będącymi wektorami nośnymi. 
+W przypadku, gdy dane nie są liniowo separowalne, czyli nie można wyznaczyć jednej hiperpłaszczyzny, algorytm SVM może zastosować technikę transformacji danych do przestrzeni o większej liczbie wymiarów. W takiej przestrzeni danych mogą stać się liniowo separowalne, co pozwoli na wyznaczenie hiperpłaszczyzny separacji.
+
+Analiza została wykonana za pomocą bibliotek *ipred*, *e1071* i *caret*. Na początku zdefiniowano klasyfikator SVM a później przystąpiono do wyznaczenia ocen.
+
+```{r, warning=FALSE, message= FALSE}
+set.seed(401839 + 400234)
+library(ipred)
+library(e1071)
+library(caret)
+
+klasSVM = svm(employee_dummy_train[,-14], employee_dummy_train[,14], svm.type= classification)
+```
+
+Następnie porównano prawdziwe wyniki do wyników predykowanych. Porównanie przeprowadzono zarówno dla zbioru testowego jak i zbioru uczącego w celu weryfikacji czy model nie jest przeuczony. Analizę rozpoczęto dla zbioru testowego.
+
+```{r,warning=FALSE, message= FALSE}
+oceny_test = predict(klasSVM, employee_dummy_test[,-14], type="class")
+
+tab_test = table(predykcja = oceny_test, prawdziwe = employee_dummy_test$LeaveOrNot)
+tab_test
+```
+Na podstawie powyższego zestawienia zauważyć można, iż dla 86% przypadków poprawnie przyporządkowano wartość 0. Dla 24% przypadków osoby, które miały według predykcji miały nie odchodzić z pracy, końcowo z niej zrezygnowały. W przypadku predykowania osób, które odejdą z pracy, poprawnie zaklasyfikowano 76% przypadków. Pozostałe 24% przypadków to osoby, które odeszły jednak według predykcji osoby te zostały zklasyfikowane jako osoby, które nie odejdą. Model ma większą tendencję do poprawnego przydziału osób, które nie odejdą z pracy.
+
+Analogicznie przeanalizowano wyniki dla zbioru uczącego.
+
+```{r}
+oceny_train = predict(klasSVM, employee_dummy_train[,-14], type="class")
+tab_train = table(predykcja = oceny_train, prawdziwe = employee_dummy_train$LeaveOrNot)
+tab_train
+```
+
+Podobnie jak dla zbioru testowego, około 86% przypadków poprawnie przyporządkowano wartość 0. Analogicznie poprawnie zaklasyfikowano 75% przypadków osób, które odeszły z pracy. Wynik ten jest gorszy o procent do tego uzyskanego na podstawie zbioru testowego. Głównym wnioskiem porównania jest to, iż na podstawie predykcji na zbiorze uczącym nie doszło do przeuczenia modelu. 
+
+Ostatnim elementem jest przeprowadzenie sprawdzianu krzyżowego dla oceny jakości klasyfikatora.
+
+```{r,warning=FALSE, message= FALSE}
+mypredictSVM <- function(object, newdata) predict(object, newdata = newdata, type="class") 
+errorest(LeaveOrNot~., data=employee_dummy, model= svm, estimator = "cv", predict= mypredictSVM)
+```
+
+Dla przeprowadzonego testu średni błąd kwadratowy wynosi około 0.20. Jako, że dąży się do minimalizacji tego błędu, wynik można uznać za zadowalający.
+
+## Random Forest
+
+Następną przeprowadzoną metodą jest metoda Random Forest. Metoda Random Forest opiera się na koncepcji drzew decyzyjnych i zespołach klasyfikatorów. Las losowy składa się z wielu drzew decyzyjnych, które są zbudowane na podstawie losowo wybranego losowo zbioru uczącego oraz losowo wybranych podzbiorów cech. Każde drzewo w lesie dokonuje niezależnej predykcji, a wyniki są uśredniane, aby móc uzyskać końcową klasyfikację. Algorytm uczy się poprzez tworzenie wielu drzew decyzyjnych, z których każde zbudowane jest na podstawie losowo wybranego zbioru uczącego. Każde drzewo wykorzystuje losowo wybrane podzbiory cech, aby dokonywać predykcji dla nowych danych. W przypadku klasyfikacji, końcowa decyzja jest podejmowana na podstawie głosowania pośród wszystkich drzew. 
+
+Implementacja metody Random Forest możliwa jest przy użyciu biblioteki *randomForest*. Proces rozpoczęto od utworzenia lasu.
+
+```{r, warning=FALSE, message= FALSE}
+set.seed(401839 + 400234)
+library(randomForest)
+klasyfikatorLL = randomForest(LeaveOrNot ~ ., data=employee_dummy, subset=index, mtry=3, importance=TRUE)
+print(klasyfikatorLL)
+```
+
+Kolejno zdecydowano się na przedstawienie ocen jakości klasyfikatora. Po przeprowadzeniu predykcji, zdecydowano się na ocenę jakości przyporządkowania. Ponownie analizę przeprowadzono na podstawie zbioru uczącego i testowego. Rozpoczęto od zbioru testowego.
+
+```{r,warning=FALSE, message= FALSE}
+oceny_test = predict(klasyfikatorLL, employee_dummy_test)
+table(predykcja = oceny_test, prawdziwe = employee_dummy_test$LeaveOrNot)
+```
+
+W przypadku przyporządkowania wartości 0, wyniki są zbliżone do rezultatów uzyskanych w metodzie SVM. 87% przypadków poprawnie przyporządkowano wartość 0, a dla 23% przypadków osoby, które według predykcji miały nie odchodzić z pracy, końcowo z niej zrezygnowały. W przypadku, gdy prawdziwą wartość było 1, poprawność przyporządkowania wyniosła 75%.
+
+Następnie w celu określenia czy doszło do przeuczenia modelu, przeprowadzono analogiczną predykcję dla zbioru uczącego.
+
+```{r}
+oceny_train = predict(klasyfikatorLL, employee_dummy_train)
+table(predykcja = oceny_train, prawdziwe = employee_dummy_train$LeaveOrNot)
+```
+
+Na podstawie powyższego zestawienia zauważyć można, iż wyniki są analogiczne do tych przeprowadzonch na podstawie zbioru testowego. 87% przypadków poprawnie przyporządkowano wartość 0, a 75% przypadków poprawnie przyporządkowano wartość 1. Tym samym udało się wykazać, iż model nie jest przeuczony.
+
+Następnie przeprowadzono sprawdzian krzyżowy dla oceny jakości klasyfikatora.
+
+```{r,warning=FALSE, message= FALSE}
+mypredictRF <- function(object, newdata) predict(object, newdata = newdata, "class")
+errorest(LeaveOrNot ~ ., data=employee_dummy, model= randomForest, estimator = "cv", predict= mypredictRF)
+```
+
+Średni błąd kwadratowy oscyluje w okolicy 0.2, co jest wynikiem bardzo zbliżonym do błędu uzyskanego dla metody SVM. Sugeruje to, iż metoda ta poradziła sobie z predykcjami porównywalnie z metodą  SVM.
+
+Na końcu zdecydowano się na zaprezentowanie ważności predyktorów.
+
+```{r,warning=FALSE, message= FALSE, fig.align='center'}
+varImpPlot(klasyfikatorLL)
+```
+
+## Drzewa decyzyjne
+
+Ostatnią metodą wykorzystaną w projekcie są drzewa decyzyjne. Drzewo decyzyjne umożliwia predykcję opartą na strukturze drzewa, w której każdy węzeł reprezentuje test dla jednej cechy danych, a każda krawędź prowadzi do kolejnego węzła lub liścia, który zawiera przewidywaną wartość. 
+W przypadku klasyfikacji, na podstawie cech wejściowych, drzewo podejmuje serię decyzji, prowadzących do przypisania obiektu do jednej z predefiniowanych klas a w przypadku regresji, drzewo przewiduje wartość numeryczną na podstawie cech wejściowych.
+
+Proces uczenia drzewa decyzyjnego polega na podziale zbioru danych na podzbiory na podstawie cechy, która umożliwia maksymalizację jednorodności między grupą i jednolitości wewnątrz grupy. Realizacja odbywa się poprzez rekurencyjne podziały, które tworzą strukturę drzewa. Po utworzeniu drzewa, można go wykorzystać do przewidywania wartości dla nowych obserwacji, przechodząc przez drzewo od korzenia do liścia na podstawie wartości cech.
+
+Drzewa decyzyjne mają kilka zalet, takich jak łatwość interpretacji, zdolność do obsługi zarówno danych kategorycznych, jak i numerycznych, oraz możliwość obsługi brakujących danych. Mogą mieć one jednak tendencję do zbytniego dopasowania do danych uczących, co może prowadzić do niskiej ogólnej wydajności na nowych danych. Aby temu zapobiec, stosuje się techniki takie jak przycinanie drzewa, złożone drzewa (lasy losowe) lub inne metody regularyzacji.
+
+Zdecydowano się na przeprowadzenie procesu za pomocą drzewa decyzyjnego, co możliwe jest przy wykorzystaniu biblioteki *rpart*. Na początku zdefiniowano drzewo na podstawie zbioru uczącego i przedstawienie danych na temat jego specyfikacji.
+
+```{r,warning=FALSE, message= FALSE}
+set.seed(401839 + 400234)
+library(rpart)
+tree <- rpart(LeaveOrNot~., data = employee_dummy_train)
+printcp(tree)
+```
+
+Root node error oscyluje w okolicy 0.49, co oznacza, że 49% rekordów zostało poprawnie posortowanych w pierwszym korzeniu. Dodatkowo wynikiem funkcji są CP, czyli **complexity parameters** które używane są aby kontrolować wielkość drzewa. Wartość domyślna to 0.01, a im wyższa wartość tym drzewo jest mniejsze. Zbyt niskie CP sugeruje, iż doszło do zbytniego dopasowania a zbyt wysokie CP wskazuje na zbyt małe drzewo. Za pomocą błędu oszacowania, xstd i błędu walidacji krzyżowej można wyznaczyć poziom, w którym ucięte powinno zostać drzewo. Zgodnie z metodą kciuka, wyznacza się najniższy poziom dla którego rel error + xstd < xerror. Nierówność ta nie spełnia się dla 3.
+
+Zdecydowano się na zastosowanie funkcji *plotcp*, która umożliwia wykazanie miejsca, dla którego należałoby przyciąć drzewo.
+
+```{r,warning=FALSE, message= FALSE,fig.align='center'}
+plotcp(tree)
+```
+
+Kolejno zdecydowano się na przeprowadzenie predykcji. Po testach ustalono, iż próg oddzielający klasyfikację będzie równy *0.4*.
+
+```{r,warning=FALSE, message= FALSE}
+oceny_test <- predict(tree, employee_dummy_test)
+for(i in 1:length(oceny_test))
+{
+  if(oceny_test[i]>0.4)
+  {
+    oceny_test[i] <- 1
+  }
+  else
+  {
+    oceny_test[i] <- 0
+  }
+}
+```
+
+Po przeprowadzeniu klasyfikacji, zdecydowano się na ocenę jakości przyporządkowania dla zbioru testowego.
+
+```{r,warning=FALSE, message= FALSE}
+table(predykcja = oceny_test[,2], prawdziwe = employee_dummy_test$LeaveOrNot)
+```
+Dla predykcji przeprowadzonej za pomocą drzewa decyzyjnego poprawnie przewidziano 76% przypadków, dla których pracownicy nie odeszli oraz 80% przypadków, dla których pracownicy opuścili miejsce pracy.
+
+Analogicznie przeprowadzono predykcję dla zbioru uczącego.
+
+```{r, warning=FALSE, message=FALSE}
+oceny_train <- predict(tree, employee_dummy_train)
+for(i in 1:length(oceny_train))
+{
+  if(oceny_train[i]>0.4)
+  {
+    oceny_train[i] <- 1
+  }
+  else
+  {
+    oceny_train[i] <- 0
+  }
+}
+table(predykcja = oceny_train[,2], prawdziwe = employee_dummy_train$LeaveOrNot)
+```
+
+Dla zbioru uczącego poprawnie przyporządkowano wartość 0 dla 75% przypadków i wartość 1 dla 80%, co daje analogiczne procenty jak w przypadku predykcji na zbiorze testowym.
+
+# Analiza interpretowalności
+
+Kolejnym krokiem projektu jest analiza interpretowalności w oparciu o profile ceteris-paribus, wykresy częściowej zależności oraz wartości SHAP.
+
+Modele typu black-box mogą mieć bardzo różne struktury. Funkcja explain tworzy ujednoliconą reprezentację modelu, która może być dalej przetwarzana przez funkcje objaśniające. Model, który zostanie przeanalizowany względem interpretowalności jest Las Losowy (Random Forest).
+
+```{r  warning=FALSE, message=FALSE}
+library(DALEX)
+explain_RF<- explain(model = klasyfikatorLL,
+                       data = employee_dummy_train[-14],
+                       y = as.numeric(employee_dummy_train$LeaveOrNot),
+                       type = "classification",
+                       label = "Random Forest")
+```
+
+Kolejno wybrano wartość obserwacji, dla której przeprowadzono analizy PCP i SHAP. Jest to obserwacja o numerze 10 ze zbioru danych uczących.
+
+```{r, warning=FALSE, message=FALSE}
+obs = employee_dummy_train[10,]
+t(obs)
+```
+
+Dla danej obserwacji dokonano predykcji Random Forest.
+
+```{r, warning=FALSE, message=FALSE}
+predict(klasyfikatorLL, obs)
+```
+
+Za pomocą predykcji danej obserwacji przyporządkowano jej nieprawidłową zgodnie z rzeczywistością wartość zmiennej objaśnianej. Rzeczywista wartość jest równa 0, co oznacza, że dana osoba nie odeszła z pracy, a za pomocą Random Forest predykowano, iż dana osoba w ostatnim okresie zrezygnowała z dalszej pracy.
+
+### Profile ceteris-paribus (PCP)
+```{r,fig.align='center', warning=FALSE, message=FALSE}
+pcp <- predict_profile(explainer = explain_RF, new_observation = obs)
+plot(pcp)
+```
+
+Z wykresów profili ceteris-paribus zauważyć można, że dla testowanej obserwacji, największy wpływ na zmianę predykcji miałaby zmiana poziomu edukacji (przy zachowaniu niezmienionych wartości pozostałych zmiennych). Zamiana wartości w zmienej Education_Masters na 0 zmniejszyłaby wartość predykcji o ok. 0.5. Zauważalny wpływ na predykcje miałyby również zmienne PaymentTier_2, JoiningYear_2017 i JoiningYear_2018.
+
+
+### Wykresy częściowej zależności (PDP)
+
+Ogólną ideą leżącą u podstaw konstruowania profili PD jest pokazanie, w jaki sposób wartość oczekiwana predykcji modelu zachowuje się jako funkcja wybranej zmiennej objaśniającej. Dla pojedynczego modelu można skonstruować ogólny profil PD, wykorzystując wszystkie obserwacje ze zbioru danych lub kilka profili dla podgrup obserwacji. Porównanie profili specyficznych dla podgrup może zapewnić ważny wgląd w np. stabilność przewidywań modelu. Profil PDP jest szacowany przez średnią profili CP dla wszystkich obserwacji ze zbioru danych.
+
+```{r, fig.align='center', warning=FALSE, message=FALSE}
+pdp <- model_profile(explainer = explain_RF)
+plot(pdp)
+```
+
+Analizując wykresy częściowej zależności zauważyć można, że wartość oczekiwana predykcji zmienia się najbardziej dla zmiennych Education_Masters, JoiningYear_2018 i PaymentTier_2. Posiadanie tytułu magistra zwiększa szansę na odejście z pracy aż o 25 punktów procentowych. Dołączenie do miejsca pracy w 2018 roku, również podnosi wartość oczekiwaną prognozy o 60 punktów procentowych, znajdowanie się w drugich "widełkach płacowych" powoduje podwyższenie średniej predykcji o 30 punktów procentowych. Co ciekawe płeć również ma znaczenie dla wartości oczekiwanej przewidywań. Bycie mężczyzną obniża wartość średniej predykcji o 15 punktów procentowych.
+
+### Wartości SHAP
+
+Kolejnym krokiem projektu jest analiza interpretowalności za pomocą wartości SHAP. Wartość SHAP, czyli Shapley Additive exPlanations jest podejściem szeroko stosowanym w teorii gier. Dzięki SHAP można wytłumaczyć dane wyjściowe swojego modelu uczenia maszynowego. SHAP jest wartością cechową średniego wkładu krańcowego wśród wszystkich kombinacji możliwych cech.
+
+```{r, fig.align='center', warning=FALSE, message=FALSE}
+shap <- predict_parts(explainer = explain_RF, 
+                      new_observation = obs, 
+                      type = "shap")
+plot(shap,show_boxplots = FALSE)
+```
+
+Wykres SHARP ukazuje nam uzasadnienie predykcji dla wybranej obserwacji 'obs'. SHAP wylicza jaki wpływ na wynik mają konkretne wartości zmiennych. Jak widać na powyższym wykresie, największy wpływ na to, że predykowana wartość przyjęła wartosć 1 mają Education_Masters = 1,
+oraz PaymentTier_2 = 1, to one "ciągnęły" predykcje w kierunku wartości 1. Z kolei JoiningYear_2017 = 1 i City_New_Delhi = 1 "ciągnęły" prognozę w kierunku przeciwnym tj. do wartości 0. Dla pozostałych zmiennych wpływy były analogiczne, lecz ich wartości nie były już tak bardzo znaczące.
+
+
+# Wnioski końcowe
+
+Na podstawie przeprowadzonego projektu można zaprezentować następujące wnioski:  
+1. Założone zależności pomiędzy zmiennymi, zgodne z obserwacją otoczenia, nie mają swojego zobrazowania w zbiorze danych. Większe wykształcenie lub doświadczenie nie mają wpływu na poziom zarobków.  
+2. Zmienne mówiące o wieku, informacji czy dany pracownik został kiedykolwiek na dłużej odsunięty od projektu oraz doświadczenia w danej dziedzinie okazały się nieistotne dla predykcji czy dany pracownik odszedł z firmy.  
+3. Zbiór domyślny był niezbilansowany, dlatego też przed rozpoczęciem pracy należało zastosować technikę overfittingu, w którym zdublowano krotki z wartością 1.  
+4. Wyniki sprawdzianiu krzyżowego dla metody SVM i Random Forest są do siebie zbliżone i oscylują w okolicy 0.2.  
+5. Dla drzewa decyzyjnego przycięcie powinno odbyć się na poziomie równym 3.  
+6. W przypadku, w którym predykowano czy pracownik nie odszedł z pracy, najlepszy wynik osiągnęła metoda Random Forest.  
+7. W przypadku, w którym predykowano czy pracownik odszedł z pracy, najlepszy wynik osiągnęła metoda drzewa decyzyjnego.  
+8. Według profili ceteris-paribus (PCP) dla modelu lasu losowego dla wybranej obserwacji nr 10 ze zbioru uczącego, największy wpływ na zmianę predykcji (przy zachowaniu pozostałych zmiennych bez zmian) miałaby zmiana wartości zmiennej Education_Masters.  
+9. Na podstawie wykresów częściowej zależności (PDP) największy wpływ na potencjalną zmianę wartości oczekiwanej predykcji mają zmienne Education_Masters, JoiningYear_2018 i PaymentTier_2.  
+10. W oparciu o wartości SHAP, największy wpływ na to, że wartość predykcji dla obserwacji nr 10 wyniosła "1" miały zmienne Education_Masters = 1 oraz PaymentTier_2 = 1, natomiast fakt, że zmienna JoiningYear_2017 przyjmowała wartość 1 w tej obserwacji zmniejszał ostateczny wynik predykcji.  
